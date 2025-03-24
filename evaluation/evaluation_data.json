@@ -1,0 +1,52 @@
+[
+    {
+        "lab_no": "123456",
+        "question": "What does high GFR mean?",
+        "expected_response": "A high GFR may indicate hyperfiltration, often seen in early diabetic nephropathy or pregnancy. It may also be an artifact due to body size."
+    },
+    {
+        "lab_no": "789012",
+        "question": "Are there any critical abnormalities?",
+        "expected_response": "Yes, the hemoglobin level is critically low at 7.2 g/dL, which may indicate severe anemia. Immediate medical attention is advised."
+    },
+    {
+        "lab_no": "234567",
+        "question": "What does a low WBC count indicate?",
+        "expected_response": "A low WBC count (leukopenia) may indicate a viral infection, bone marrow disorder, or an autoimmune disease. Further tests are recommended."
+    },
+    {
+        "lab_no": "345678",
+        "question": "Should the patient be concerned about high LDL levels?",
+        "expected_response": "Yes, elevated LDL cholesterol increases the risk of heart disease and stroke. Lifestyle changes and possible medication should be considered."
+    },
+    {
+        "lab_no": "456789",
+        "question": "What is the significance of elevated creatinine levels?",
+        "expected_response": "Elevated creatinine levels suggest impaired kidney function, dehydration, or high protein intake. Further kidney function tests are recommended."
+    },
+    {
+        "lab_no": "567890",
+        "question": "What does an elevated CRP level suggest?",
+        "expected_response": "An elevated CRP level indicates inflammation and may be associated with infections, autoimmune diseases, or cardiovascular risk."
+    },
+    {
+        "lab_no": "678901",
+        "question": "Does the patient have signs of diabetes?",
+        "expected_response": "Yes, the fasting blood glucose level is 135 mg/dL, which is above normal. This indicates potential diabetes or prediabetes."
+    },
+    {
+        "lab_no": "789123",
+        "question": "What does a high platelet count indicate?",
+        "expected_response": "A high platelet count (thrombocytosis) may be caused by inflammation, infection, or a bone marrow disorder. Further testing is needed."
+    },
+    {
+        "lab_no": "890234",
+        "question": "Is the sodium level within the normal range?",
+        "expected_response": "No, the sodium level is 130 mmol/L, which is below normal. This may indicate hyponatremia due to dehydration, kidney disease, or hormonal imbalance."
+    },
+    {
+        "lab_no": "901345",
+        "question": "Are there any indicators of liver disease?",
+        "expected_response": "Yes, elevated ALT and AST levels suggest potential liver damage. Further tests like bilirubin and albumin levels should be assessed."
+    }
+]

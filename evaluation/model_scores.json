@@ -1,0 +1,452 @@
+[
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "123456",
+    "similarity_score": 7.55
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "789012",
+    "similarity_score": 6.09
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "234567",
+    "similarity_score": 7.87
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "345678",
+    "similarity_score": 7.13
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "456789",
+    "similarity_score": 8.14
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "567890",
+    "similarity_score": 8.25
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "678901",
+    "similarity_score": 6.75
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "789123",
+    "similarity_score": 7.48
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "890234",
+    "similarity_score": 7.56
+  },
+  {
+    "model": "llama3-70b-8192",
+    "lab_no": "901345",
+    "similarity_score": 7.11
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "123456",
+    "similarity_score": 7.08
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "789012",
+    "similarity_score": 5.02
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "234567",
+    "similarity_score": 0.06
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "345678",
+    "similarity_score": 6.55
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "456789",
+    "similarity_score": 7.9
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "567890",
+    "similarity_score": 8.0
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "678901",
+    "similarity_score": 6.86
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "789123",
+    "similarity_score": 8.28
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "890234",
+    "similarity_score": 7.22
+  },
+  {
+    "model": "deepseek-r1-distill-llama-70b",
+    "lab_no": "901345",
+    "similarity_score": 6.91
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "123456",
+    "similarity_score": 7.39
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "789012",
+    "similarity_score": 5.31
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "234567",
+    "similarity_score": 7.59
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "345678",
+    "similarity_score": 6.6
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "456789",
+    "similarity_score": 8.76
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "567890",
+    "similarity_score": 8.77
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "678901",
+    "similarity_score": 6.84
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "789123",
+    "similarity_score": 8.54
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "890234",
+    "similarity_score": 8.02
+  },
+  {
+    "model": "qwen-2.5-32b",
+    "lab_no": "901345",
+    "similarity_score": 6.64
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "123456",
+    "similarity_score": 7.0
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "789012",
+    "similarity_score": 6.19
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "234567",
+    "similarity_score": 8.33
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "345678",
+    "similarity_score": 6.36
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "456789",
+    "similarity_score": 8.81
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "567890",
+    "similarity_score": 8.27
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "678901",
+    "similarity_score": 7.37
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "789123",
+    "similarity_score": 8.1
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "890234",
+    "similarity_score": 7.76
+  },
+  {
+    "model": "llama-3.3-70b-specdec",
+    "lab_no": "901345",
+    "similarity_score": 6.11
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "123456",
+    "similarity_score": 7.14
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "789012",
+    "similarity_score": 4.46
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "234567",
+    "similarity_score": 8.02
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "345678",
+    "similarity_score": 5.99
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "456789",
+    "similarity_score": 8.45
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "567890",
+    "similarity_score": 8.27
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "678901",
+    "similarity_score": 4.98
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "789123",
+    "similarity_score": 7.34
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "890234",
+    "similarity_score": 7.09
+  },
+  {
+    "model": "llama-3.2-11b-Vision-Preview",
+    "lab_no": "901345",
+    "similarity_score": 5.1
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "123456",
+    "similarity_score": 8.11
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "789012",
+    "similarity_score": 2.9
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "234567",
+    "similarity_score": 7.48
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "345678",
+    "similarity_score": 5.87
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "456789",
+    "similarity_score": 8.45
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "567890",
+    "similarity_score": 8.63
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "678901",
+    "similarity_score": 6.91
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "789123",
+    "similarity_score": 8.83
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "890234",
+    "similarity_score": 7.0
+  },
+  {
+    "model": "mistral-saba-24b",
+    "lab_no": "901345",
+    "similarity_score": 5.05
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "123456",
+    "similarity_score": 7.64
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "789012",
+    "similarity_score": 5.91
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "234567",
+    "similarity_score": 7.77
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "345678",
+    "similarity_score": 6.89
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "456789",
+    "similarity_score": 8.04
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "567890",
+    "similarity_score": 8.26
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "678901",
+    "similarity_score": 7.01
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "789123",
+    "similarity_score": 8.19
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "890234",
+    "similarity_score": 8.0
+  },
+  {
+    "model": "llama3-8b-8192",
+    "lab_no": "901345",
+    "similarity_score": 7.11
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "123456",
+    "similarity_score": 7.39
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "789012",
+    "similarity_score": 6.2
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "234567",
+    "similarity_score": 7.85
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "345678",
+    "similarity_score": 8.26
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "456789",
+    "similarity_score": 8.65
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "567890",
+    "similarity_score": 8.67
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "678901",
+    "similarity_score": 6.54
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "789123",
+    "similarity_score": 8.16
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "890234",
+    "similarity_score": 6.98
+  },
+  {
+    "model": "qwen-2.5-coder-32b",
+    "lab_no": "901345",
+    "similarity_score": 6.52
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "123456",
+    "similarity_score": 6.37
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "789012",
+    "similarity_score": 4.49
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "234567",
+    "similarity_score": 7.76
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "345678",
+    "similarity_score": 5.56
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "456789",
+    "similarity_score": 8.49
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "567890",
+    "similarity_score": 8.39
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "678901",
+    "similarity_score": 6.37
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "789123",
+    "similarity_score": 7.85
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "890234",
+    "similarity_score": 6.9
+  },
+  {
+    "model": "gemma2-9b-it",
+    "lab_no": "901345",
+    "similarity_score": 5.92
+  }
+]

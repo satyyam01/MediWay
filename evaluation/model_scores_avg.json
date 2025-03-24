@@ -1,0 +1,38 @@
+[
+    {
+        "model": "llama3-70b-8192",
+        "average_similarity_score": 7.393000000000001
+    },
+    {
+        "model": "deepseek-r1-distill-llama-70b",
+        "average_similarity_score": 6.388
+    },
+    {
+        "model": "qwen-2.5-32b",
+        "average_similarity_score": 7.446000000000001
+    },
+    {
+        "model": "llama-3.3-70b-specdec",
+        "average_similarity_score": 7.4300000000000015
+    },
+    {
+        "model": "llama-3.2-11b-Vision-Preview",
+        "average_similarity_score": 6.684
+    },
+    {
+        "model": "mistral-saba-24b",
+        "average_similarity_score": 6.923
+    },
+    {
+        "model": "llama3-8b-8192",
+        "average_similarity_score": 7.481999999999999
+    },
+    {
+        "model": "qwen-2.5-coder-32b",
+        "average_similarity_score": 7.522
+    },
+    {
+        "model": "gemma2-9b-it",
+        "average_similarity_score": 6.81
+    }
+]
