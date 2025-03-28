@@ -2,9 +2,6 @@ import streamlit as st
 import os
 import tempfile
 import requests
-import time
-import json
-from PIL import Image
 from preprocessing import MedicalReportProcessor
 from auth import StreamlitAuth, login_required, display_login_form, logout
 
