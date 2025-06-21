@@ -1,103 +1,144 @@
+# chatbot.py
 import requests
 import json
-from database import fetch_patient_data
+from database import fetch_patient_data, get_conversation_history, update_conversation_history
 
 GROQ_API_KEY = "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"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
-def analyze_report(lab_no, custom_prompt=None):
+def format_patient_context(patient_context):
+    """Format patient context information for the AI prompt"""
+    if not patient_context:
+        return ""
+
+    # Format weight and height for BMI calculation if available
+    weight = patient_context.get('weight', '')
+    height = patient_context.get('height', '')
+    bmi_info = ""
+    if weight and height:
+        try:
+            weight_kg = float(weight)
+            height_m = float(height) / 100  # Convert cm to m
+            bmi = weight_kg / (height_m * height_m)
+            bmi_info = f"BMI: {bmi:.1f} ({weight} kg, {height} cm)"
+        except ValueError:
+            bmi_info = f"Weight: {weight} kg, Height: {height} cm"
+
+    # Format medical conditions
+    medical_conditions = patient_context.get('medical_conditions', [])
+    conditions_str = ", ".join(medical_conditions) if medical_conditions else "None reported"
+
+    # Compile context information
+    context_info = f"""
+    *Additional Patient Context:*
+    {bmi_info}
+    Medical Conditions: {conditions_str}
+    Symptoms: {patient_context.get('symptoms', 'None reported')}
+    Lifestyle: {patient_context.get('lifestyle', 'No information provided')}
+    Medications: {patient_context.get('medications', 'None reported')}
     """
-    Fetch patient data and analyze it using Qwen API with enhanced conversational prompts.
+
+    return context_info
+
+
+def analyze_report(lab_no, custom_prompt=None, patient_context=None):
+    """
+    Fetch patient data and analyze it using Groq API with conversation history.
+
+    Args:
+        lab_no: Lab number for the report
+        custom_prompt: Optional specific question from the user
+        patient_context: Optional additional patient context data
     """
     data = fetch_patient_data(lab_no)
     if not data:
         return {"error": "No patient found with this Lab No."}
 
-    # Extract personal details for a friendly approach
-    patient_name = data.get('name', 'there')
-    patient_age = data.get('age', '')
-    patient_gender = data.get('gender', '')
+    # Get existing conversation history
+    conversation_history = get_conversation_history(lab_no)
+
+    # Extract personal details for personalization
+    patient_name = data.get('Patient Details', {}).get('Name', 'there')
+    patient_age = data.get('Patient Details', {}).get('Age', '')
+    patient_gender = data.get('Patient Details', {}).get('Gender', '')
 
     patient_info = json.dumps(data, indent=2)
 
-    # System role to ensure an engaging & reassuring response
-    system_role = f"""
-    You are Dr. {patient_name.split()[0]}'s AI Medical Assistant, specializing in making blood test reports easier to understand. 
-    Your responses should:
-    - Address {patient_name} personally
-    - Use an empathetic, encouraging tone
-    - Break down medical terms into simple explanations
-    - Use analogies that relate to everyday life (e.g., "Think of hemoglobin like oxygen delivery trucks in your body.")
-    - Offer insights but avoid making absolute diagnoses
-    - Ask open-ended questions to encourage patient engagement
+    # Process additional patient context
+    context_info = format_patient_context(patient_context)
+
+    # System prompt with improved instructions
+    system_role = f"""You are Dr. {patient_name.split()[0]}'s Care Assistant, a friendly AI medical companion with a warm, 
+    empathetic tone. You specialize in explaining complex medical information in simple, relatable terms. You have Industry Experience of Several Years and it shows in your demeanor.
+    Always:
+    - Use the patient's first name ({patient_name}) when addressing them 
+    - Show genuine concern and maintain positive reinforcement
+    - Use conversational language with natural pauses
+    - Explain medical terms using everyday analogies
+    - Check for understanding periodically
+    - Maintain hopeful tone while being honest about risks
+    - Use paragraph breaks for readability
+    - IMPORTANT: Only greet the patient in your first message. For follow-up messages, respond directly to their question
+    - If this is a follow-up message, don't repeat information you've already shared unless asked
     """
 
-    # Choose appropriate prompt
+    # Build messages array starting with system prompt
+    messages = [{"role": "system", "content": system_role}]
+
+    # Add background info as a hidden context message
+    background = f"""*Patient Background:*
+    {patient_name}, {patient_age} {patient_gender}
+    {patient_info}
+    {context_info}"""
+
+    messages.append({"role": "system", "content": background})
+
+    # Add conversation history if it exists
+    if conversation_history:
+        messages.extend(conversation_history)
+
+    # Add the new user message if provided
     if custom_prompt:
-        prompt = f"""
-        *Patient Background:*
-        Name: {patient_name}, Age: {patient_age}, Gender: {patient_gender}
-        {patient_info}
-
-        *User's Query:*  
-        "{custom_prompt}"  
-
-        *Response Guidelines:*  
-        1. Start with an empathetic acknowledgment  
-        2. Answer in **2-3 concise, clear points**  
-        3. Use a relatable analogy if applicable  
-        4. Ask if they need further clarification  
-        """
+        messages.append({"role": "user", "content": custom_prompt})
     else:
-        prompt = f"""
-        *Blood Test Analysis for {patient_name} ({patient_age}, {patient_gender})*
+        # This is the first message, so add instructions for initial greeting
+        instructions = f"""This is the first message to the patient. Begin with a friendly greeting, then:
+        1. Mention 1-2 most notable findings in simple terms
+        2. Explain one relevant analogy/metaphor
+        3. If patient provided context (symptoms, conditions, medications), make specific connections
+        4. Ask an open-ended question about their current experience
+        5. Suggest clear next steps as options, not commands"""
 
-        *Main Findings:*  
-        {patient_info}  
+        messages.append({"role": "system", "content": instructions})
 
-        *Your Task:*  
-        - Greet {patient_name} warmly  
-        - Highlight **one or two key findings** in easy terms  
-        - Use a simple analogy to explain a key result  
-        - Ask them how they’ve been feeling in relation to the report  
-        - Offer **next steps in a friendly, non-alarming way**  
-
-        **Example start:**  
-        "Hi {patient_name}, I just went through your blood test results.  Here’s something that stood out...  
-        [Explain finding] – it’s kind of like [use analogy]...  
-        Have you been feeling [related symptom] recently?"  
-        """
-
+    # API call setup
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": "qwen-2.5-coder-32b",
-        "messages": [
-            {"role": "system", "content": system_role},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.8,  # Keeps responses engaging but not too unpredictable
+        "model": "llama3-8b-8192",
+        "messages": messages,
+        "temperature": 0.85,
         "max_tokens": 1000,
         "top_p": 0.9,
-        "frequency_penalty": 0.2,  # Helps reduce repeated information
+        "frequency_penalty": 0.2,
         "presence_penalty": 0.1
     }
 
     try:
         response = requests.post(GROQ_API_URL, headers=headers, json=payload)
         response.raise_for_status()
-        raw_response = response.json()["choices"][0]["message"]["content"]
+        bot_response = response.json()["choices"][0]["message"]["content"]
 
-        # Improve readability by adding natural pauses
-        return raw_response.replace(". ", ".  ")
+        # Save the conversation exchange if it was a real user message
+        if custom_prompt:
+            update_conversation_history(lab_no, custom_prompt, bot_response)
 
-    except requests.exceptions.RequestException:
-        return f"Apologies {patient_name}, I'm having trouble connecting. Please try again in a moment."
-
-    except (KeyError, IndexError, json.JSONDecodeError):
-        return "Something went wrong on my end. Could you try asking again?"
-
+        return bot_response
+    except requests.exceptions.RequestException as e:
+        return f"Apologies {patient_name}, I'm experiencing technical difficulties: {str(e)}"
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        return f"Apologies {patient_name}, there was an issue processing your request: {str(e)}"

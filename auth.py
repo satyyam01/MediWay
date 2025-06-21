@@ -1,20 +1,28 @@
 import streamlit as st
+import bcrypt
 import re
-from database import UserDatabase
+from pymongo import MongoClient
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+from database import delete_report_and_related_data  # Make sure this is at the top
 
-def validate_email(email):
-    """Simple email validation"""
-    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(email_regex, email) is not None
 
-def validate_password(password):
-    """
-    Password validation:
-    - At least 8 characters
-    - Contains at least one uppercase letter
-    - Contains at least one lowercase letter
-    - Contains at least one number
-    """
+# --- Load Environment Variables ---
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+
+# --- MongoDB Connection ---
+client = MongoClient(MONGO_URI)
+db = client["mediway"]
+users_col = db["users"]
+patients_col = db["patients"]
+
+# --- Validators ---
+def validate_email(email: str) -> bool:
+    return re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email) is not None
+
+def validate_password(password: str) -> bool:
     return (
         len(password) >= 8 and
         any(c.isupper() for c in password) and
@@ -22,126 +30,144 @@ def validate_password(password):
         any(c.isdigit() for c in password)
     )
 
-def homepage():
-    """Welcoming homepage for MediWay"""
-    st.title("🩸 MediWay")
+# --- User Registration ---
+def register_user(username: str, email: str, password: str):
+    if users_col.find_one({"username": username}):
+        return False, "❌ Username already exists."
 
-    st.markdown("""
-    <style>
-    .homepage-container {
-        background-color: #f0f2f6;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-    }
-    .welcome-text {
-        font-size: 24px;
-        color: #333;
-        margin-bottom: 20px;
-    }
-    </style>
-    <div class="homepage-container">
-        <div class="welcome-text">
-            Welcome to MediWay: Your Personal Health Companion 🩺
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    if users_col.find_one({"email": email}):
+        return False, "❌ Email is already registered."
 
-    # Description
-    st.write("""
-    ### AI-Powered Medical Report Analysis
+    hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
-    Our platform provides:
-    - Comprehensive blood test report insights
-    - AI-driven health analysis
-    - Personalized medical consultations
-    - Secure and private health tracking
-    """)
+    users_col.insert_one({
+        "username": username,
+        "email": email,
+        "password": hashed_pw,
+        "reports": [],
+        "created_at": datetime.utcnow()
+    })
 
-    # Authentication buttons
-    col1, col2 = st.columns(2)
+    return True, "✅ Account created successfully!"
 
-    with col1:
-        if st.button("Login", key="login_btn", use_container_width=True):
-            st.session_state.page = 'login'
-            st.rerun()
+# --- User Login ---
+def login_user(username: str, password: str):
+    user = users_col.find_one({"username": username})
+    if user and bcrypt.checkpw(password.encode(), user["password"]):
+        return True, user
+    return False, None
 
-    with col2:
-        if st.button("Sign Up", key="signup_btn", use_container_width=True):
-            st.session_state.page = 'signup'
-            st.rerun()
-
+# --- Login Page ---
 def login_page():
-    """Login page UI"""
-    st.title("🩸 MediWay - Login")
+    st.title("🔐 Login to MediWay")
 
-    # Initialize database
-    db = UserDatabase()
-
-    # Login form
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        login_button = st.form_submit_button("Login")
+        submitted = st.form_submit_button("Login")
 
-        if login_button:
+        if submitted:
             if not username or not password:
-                st.error("Please fill in all fields")
-            elif db.login_user(username, password):
-                # Store login state
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.rerun()
+                st.error("⚠️ All fields are required.")
             else:
-                st.error("Invalid username or password")
-
-    # Signup link
-    if st.button("Create New Account"):
-        st.session_state.page = 'signup'
-        st.rerun()
-
-    # Back to homepage
-    if st.button("Back to Home"):
-        st.session_state.page = 'home'
-        st.rerun()
-
-def signup_page():
-    """Signup page UI"""
-    st.title("🩸 MediWay - Sign Up")
-
-    # Initialize database
-    db = UserDatabase()
-
-    # Signup form
-    with st.form("signup_form"):
-        new_username = st.text_input("Choose a Username")
-        email = st.text_input("Email Address")
-        new_password = st.text_input("Create Password", type="password")
-        confirm_password = st.text_input("Confirm Password", type="password")
-        signup_button = st.form_submit_button("Sign Up")
-
-        if signup_button:
-            # Validation checks
-            if not new_username or not email or not new_password or not confirm_password:
-                st.error("Please fill in all fields")
-            elif db.user_exists(new_username):
-                st.error("Username already exists")
-            elif not validate_email(email):
-                st.error("Invalid email address")
-            elif not validate_password(new_password):
-                st.error("Password must be at least 8 characters long and contain uppercase, lowercase, and number")
-            elif new_password != confirm_password:
-                st.error("Passwords do not match")
-            else:
-                # Attempt to register user
-                if db.register_user(new_username, new_password, email):
-                    st.success("Account created successfully! Please log in.")
-                    st.session_state.page = 'login'
+                success, user = login_user(username, password)
+                if success:
+                    st.session_state.logged_in = True
+                    st.session_state.username = user["username"]
+                    st.session_state.page = "dashboard"
+                    st.session_state.user = {
+                        "username": user["username"],
+                        "email": user["email"],
+                        "_id": str(user["_id"])
+                    }
                     st.rerun()
                 else:
-                    st.error("Registration failed. Please try again.")
+                    st.error("❌ Invalid username or password.")
 
-    # Back to login
-    if st.button("Back to Login"):
-        st.session_state.page = 'login'
+    st.divider()
+    if st.button("Don't have an account? 👉 Sign Up"):
+        st.session_state.page = "signup"
         st.rerun()
+
+# --- Signup Page ---
+def signup_page():
+    st.title("📝 Create Your MediWay Account")
+
+    with st.form("signup_form"):
+        username = st.text_input("Username")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        confirm_password = st.text_input("Confirm Password", type="password")
+        submitted = st.form_submit_button("Sign Up")
+
+        if submitted:
+            if not all([username, email, password, confirm_password]):
+                st.error("⚠️ Please fill out all fields.")
+            elif password != confirm_password:
+                st.error("❌ Passwords do not match.")
+            elif not validate_email(email):
+                st.error("❌ Invalid email format.")
+            elif not validate_password(password):
+                st.warning("⚠️ Password must be 8+ characters long, and include uppercase, lowercase, and digits.")
+            else:
+                success, msg = register_user(username, email, password)
+                if success:
+                    st.success(msg)
+                    st.session_state.page = "login"
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+    st.divider()
+    if st.button("Already have an account? 👉 Login"):
+        st.session_state.page = "login"
+        st.rerun()
+
+# --- Report Viewer (My Reports) ---
+
+def show_my_reports():
+    st.markdown("## 📄 My Uploaded Reports")
+
+    username = st.session_state.get("username")
+    if not username:
+        st.warning("⚠️ Please login to view your uploaded reports.")
+        return
+
+    reports = list(patients_col.find({"username": username}).sort("reported_date", -1))
+
+    if not reports:
+        st.info("📝 You haven’t uploaded any reports yet.")
+        return
+
+    for i, report in enumerate(reports):
+        report_id = report.get("report_id")
+        with st.expander(f"{report.get('name', 'Unknown')} | {report.get('reported_date', 'Date N/A')}"):
+            st.markdown(f"**Patient Name:** {report.get('name', '')}")
+            st.markdown(f"**Age:** {report.get('age', '')}")
+            st.markdown(f"**Gender:** {report.get('gender', '')}")
+            st.markdown(f"**Reported On:** {report.get('reported_date', '')}")
+            st.markdown(f"**Report ID:** `{report_id}`")
+
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if st.button("📊 View Report", key=f"view_{report_id}"):
+                    st.session_state.current_report_id = report_id
+                    st.session_state.page = "dashboard"
+                    st.rerun()
+
+            with col2:
+                if st.button("🗑️ Delete", key=f"delete_{report_id}"):
+                    success = delete_report_and_related_data(report_id)
+
+                    # Clean session state
+                    st.session_state.pop(f"analysis_{report_id}", None)
+                    st.session_state.pop(f"messages_{report_id}", None)
+
+                    if st.session_state.get("current_report_id") == report_id:
+                        st.session_state.current_report_id = None
+
+                    if success:
+                        st.success(f"✅ Report `{report_id}` deleted.")
+                    else:
+                        st.error(f"❌ Failed to delete report `{report_id}`.")
+                    st.rerun()

@@ -2,45 +2,32 @@ import streamlit as st
 import os
 import tempfile
 import requests
-from preprocessing import MedicalReportProcessor
+import pandas as pd
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
-# API endpoints
+from preprocessing import MedicalReportProcessor
+from utils import save_uploaded_file
+from auth import show_my_reports
+from database import get_conversation_history, update_conversation_history
+from chatbot import analyze_report
+
+# Load environment variables
+load_dotenv()
+
+# MongoDB setup
+client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"))
+db = client["mediway"]
+patients_collection = db["patients"]
+tests_collection = db["tests"]
+
 API_BASE_URL = "http://127.0.0.1:8080"  # FastAPI base URL
 
 
-def save_uploaded_file(uploaded_file):
-    """Save uploaded file to a temporary location and return the path"""
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
-        return tmp_file.name
-
-
-def process_pdf(file_path):
-    """Process the uploaded PDF using MedicalReportProcessor"""
-    processor = MedicalReportProcessor(db_name="medical_reports_new.db")
-    success = processor.process_report(file_path)
-
-    # Check if data is stored
-    conn = processor._get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT lab_no FROM Patients ORDER BY id DESC LIMIT 1")
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-
-    if result:
-        print("Retrieved lab_no:", result[0])  # Debugging
-        return success, result[0]
-    else:
-        print("No lab_no found!")  # Debugging
-        return success, None
-
-
-def fetch_report_data(lab_no):
-    """Fetch report data from FastAPI endpoint"""
+@st.cache_data(show_spinner=False)
+def fetch_report_data(report_id):
     try:
-        response = requests.get(f"{API_BASE_URL}/report/{lab_no}")
-        print("Fetching report data:", response.status_code, response.text)  # Debug print
+        response = requests.get(f"{API_BASE_URL}/report/{report_id}")
         if response.status_code == 200:
             return response.json()
         else:
@@ -51,20 +38,13 @@ def fetch_report_data(lab_no):
         return None
 
 
-def get_analysis(lab_no, patient_context=None):
-    """Get AI analysis for the report with optional patient context"""
+def get_analysis(report_id):
     try:
         with st.spinner("Analyzing report with AI..."):
-            if patient_context:
-                # Send patient context along with the analysis request
-                response = requests.post(
-                    f"{API_BASE_URL}/analyze/{lab_no}",
-                    json={"patient_context": patient_context}
-                )
-            else:
-                response = requests.get(f"{API_BASE_URL}/analyze/{lab_no}")
-
-            print("Fetching AI analysis:", response.status_code, response.text)  # Debug print
+            response = requests.post(
+                f"{API_BASE_URL}/analyze/{report_id}",
+                json={"patient_context": st.session_state.get("patient_context", {})}
+            )
             if response.status_code == 200:
                 return response.json()["analysis"]
             else:
@@ -75,100 +55,7 @@ def get_analysis(lab_no, patient_context=None):
         return None
 
 
-def display_patient_form():
-    """Display a more compact patient context form and return the collected data"""
-    # Use an expander with a default state
-    with st.expander("Patient Context", expanded=not st.session_state.get('form_collapsed', False)):
-        # Initialize the form data in session state if not already present
-        if "patient_context" not in st.session_state:
-            st.session_state.patient_context = {
-                "weight": "",
-                "height": "",
-                "medical_conditions": [],
-                "symptoms": "",
-                "lifestyle": "",
-                "medications": ""
-            }
-
-        # Use columns to make the form more compact
-        col1, col2 = st.columns(2)
-
-        # Basic physical info
-        with col1:
-            weight = st.text_input("Weight (kg)",
-                                   value=st.session_state.patient_context.get("weight", ""),
-                                   placeholder="Your weight")
-
-            # Compact medical conditions
-            st.caption("Medical Conditions")
-            col_conditions1, col_conditions2 = st.columns(2)
-            with col_conditions1:
-                diabetes = st.checkbox("Diabetes",
-                                       value="Diabetes" in st.session_state.patient_context.get("medical_conditions",
-                                                                                                []))
-                hypertension = st.checkbox("Hypertension",
-                                           value="High Blood Pressure" in st.session_state.patient_context.get(
-                                               "medical_conditions", []))
-
-            with col_conditions2:
-                heart_disease = st.checkbox("Heart Disease",
-                                            value="Heart Disease" in st.session_state.patient_context.get(
-                                                "medical_conditions", []))
-                thyroid = st.checkbox("Thyroid",
-                                      value="Thyroid Issues" in st.session_state.patient_context.get(
-                                          "medical_conditions", []))
-
-        with col2:
-            height = st.text_input("Height (cm)",
-                                   value=st.session_state.patient_context.get("height", ""),
-                                   placeholder="Your height")
-
-            # Symptoms and lifestyle
-            symptoms = st.text_area("Symptoms",
-                                    value=st.session_state.patient_context.get("symptoms", ""),
-                                    placeholder="Current symptoms",
-                                    height=100)
-
-        # Medications
-        medications = st.text_area("Medications",
-                                   value=st.session_state.patient_context.get("medications", ""),
-                                   placeholder="Current medications",
-                                   height=100)
-
-        # Submit button
-        if st.button("Save Information", type="primary"):
-            # Gather medical conditions
-            medical_conditions = []
-            if diabetes:
-                medical_conditions.append("Diabetes")
-            if hypertension:
-                medical_conditions.append("High Blood Pressure")
-            if heart_disease:
-                medical_conditions.append("Heart Disease")
-            if thyroid:
-                medical_conditions.append("Thyroid Issues")
-
-            # Save to session state
-            st.session_state.patient_context = {
-                "weight": weight,
-                "height": height,
-                "medical_conditions": medical_conditions,
-                "symptoms": symptoms,
-                "medications": medications
-            }
-
-            # Set the form to collapsed
-            st.session_state.form_collapsed = True
-
-            # Rerun to reflect the changes
-            st.rerun()
-
-    return False
-
-
-def display_report_and_insights(report_data, lab_no):
-    """Display the report data and AI insights"""
-    # Patient details
+def display_report_and_insights(report_data, report_id):
     st.header("Patient Information")
     patient = report_data["Patient Details"]
 
@@ -178,150 +65,156 @@ def display_report_and_insights(report_data, lab_no):
         st.markdown(f"**Age:** {patient['Age']}")
         st.markdown(f"**Gender:** {patient['Gender']}")
     with col2:
-        st.markdown(f"**Lab Number:** {patient['Lab Number']}")
         st.markdown(f"**Sample Collected:** {patient['Collected Date']}")
         st.markdown(f"**Report Date:** {patient['Reported Date']}")
+        st.markdown(f"**Report ID:** `{report_id}`")
 
-    # Test results
     st.header("Test Results")
-
-    # Create a DataFrame for the test results
-    import pandas as pd
-    test_data = []
-    for test in report_data["Tests"]:
-        test_data.append({
+    test_data = [
+        {
             "Test Name": test["Name"],
             "Result": test["Value"],
             "Unit": test["Unit"],
             "Reference Range": test["Reference Interval"]
-        })
-
+        } for test in report_data["Tests"]
+    ]
     df = pd.DataFrame(test_data)
     st.dataframe(df, use_container_width=True)
 
-    # Get and display AI analysis
     st.header("AI Analysis")
-
-    # Check if we already have analysis in session state
-    analysis_key = f"analysis_{lab_no}"
+    analysis_key = f"analysis_{report_id}"
     if analysis_key not in st.session_state:
-        # Pass patient context to analysis if available
-        analysis = get_analysis(lab_no, st.session_state.get("patient_context"))
+        analysis = get_analysis(report_id)
         if analysis:
             st.session_state[analysis_key] = analysis
 
     if analysis_key in st.session_state:
         st.markdown(st.session_state[analysis_key])
 
-    # Chatbot interface
     st.header("Chat with MediWay")
 
-    # Initialize chat history
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant",
-             "content": "Hello! I'm your medical assistant. You can ask me questions about your blood test results."}
-        ]
+    # Step 1: Load and display previous conversation from DB
+    history = get_conversation_history(report_id)
 
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    for msg in history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    # Chat input
-    if prompt := st.chat_input("Ask about your test results..."):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
-
-        # Display user message
+    # Step 2: Handle new input
+    if prompt := st.chat_input("Ask about your test results...", key=f"chat_input_{report_id}"):
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate assistant response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                # Create context with report data, patient context, and chat history
-                patient_context = st.session_state.get("patient_context", {})
-                context = {
-                    "report_data": report_data,
-                    "patient_context": patient_context,
-                    "prompt": prompt
-                }
-
-                # Here we would normally make a call to the chatbot API with the context
-                # For now, we'll simulate it with a direct call to analyze_report
-                from chatbot import analyze_report
-
-                # Create a more focused prompt based on the user's question and patient context
-                response = analyze_report(lab_no, custom_prompt=prompt, patient_context=patient_context)
-
-                # Display the response
+                response = analyze_report(
+                    report_id,
+                    custom_prompt=prompt,
+                    patient_context=st.session_state.get("patient_context", {})
+                )
                 st.markdown(response)
 
-                # Add assistant response to chat history
-                st.session_state.messages.append({"role": "assistant", "content": response})
+        # Step 3: Save to MongoDB for persistence
+        update_conversation_history(report_id, prompt, response)
+
+
+def app_dashboard():
+    st.title(f"Welcome to MediWay, {st.session_state.get('username', 'User')} \U0001F44B")
+
+    # Sidebar - Patient Context
+    with st.sidebar:
+        st.header("\U0001FA7A Patient Context")
+        context = st.session_state.get("patient_context", {})
+        with st.form("patient_context_form"):
+            name = st.text_input("Name", value=context.get("name", ""), key="context_name")
+            age = st.number_input("Age", min_value=0, max_value=120, step=1, value=context.get("age", 0), key="context_age")
+            gender = st.selectbox("Gender", ["Male", "Female", "Other"], index=["Male", "Female", "Other"].index(context.get("gender", "Male")), key="context_gender")
+            weight = st.number_input("Weight (kg)", min_value=0.0, max_value=300.0, step=0.1, value=context.get("weight", 0.0), key="context_weight")
+            height = st.number_input("Height (cm)", min_value=0.0, max_value=250.0, step=0.1, value=context.get("height", 0.0), key="context_height")
+            symptoms = st.text_area("Symptoms (comma separated)", value=", ".join(context.get("symptoms", [])), key="context_symptoms")
+            history = st.text_area("Past Medical History", value=context.get("history", ""), key="context_history")
+
+            submitted = st.form_submit_button("Save Context")
+            if submitted:
+                st.session_state.patient_context = {
+                    "name": name,
+                    "age": age,
+                    "gender": gender,
+                    "weight": weight,
+                    "height": height,
+                    "symptoms": [s.strip() for s in symptoms.split(",") if s.strip()],
+                    "history": history
+                }
+                st.success("Patient context saved!")
+
+        st.header("\U0001F4E4 Upload Report")
+        uploaded_file = st.file_uploader("Upload Blood Report PDF", type=["pdf"])
+
+        st.divider()
+        if st.button("\U0001F6AA Logout", use_container_width=True):
+            st.session_state.clear()
+            st.rerun()
+
+        st.divider()
+        st.markdown("### ℹ️ About MediWay")
+        st.info("MediWay helps you understand your blood test results through AI-powered analysis and personalized insights.")
+
+    # Show User Reports
+    show_my_reports()
+
+    # Handle New Upload
+    if uploaded_file is None:
+        st.session_state.upload_handled = False
+
+    if uploaded_file is not None and not st.session_state.get("upload_handled", False):
+        st.session_state.upload_handled = True
+        st.success("File uploaded successfully!")
+
+        with st.spinner("\U0001F50D Processing the blood report..."):
+            temp_path = save_uploaded_file(uploaded_file)
+            processor = MedicalReportProcessor(username=st.session_state.get("username"))
+            ctx = st.session_state.get("patient_context", {})
+            report_id = processor.process_report(temp_path, name=ctx.get("name", ""), age=ctx.get("age", 0), gender=ctx.get("gender", ""))
+            os.unlink(temp_path)
+
+        if report_id:
+            st.session_state.pop(f"analysis_{report_id}", None)
+            st.session_state.pop(f"messages_{report_id}", None)
+            st.session_state.current_report_id = report_id
+            st.success(f"✅ Report processed! Report ID: `{report_id}`")
+            st.rerun()
+        else:
+            st.error("❌ Failed to process the report. Try uploading a clearer scan.")
+
+    report_id = st.session_state.get("current_report_id")
+    if report_id:
+        report_data = fetch_report_data(report_id)
+        if report_data:
+            display_report_and_insights(report_data, report_id)
+        else:
+            st.error("Report data not found. Please try again.")
 
 
 def main():
-    # Set page config
-    st.set_page_config(
-        page_title="MediWay - Blood Report Analysis",
-        page_icon="🩸",
-        layout="wide"
-    )
+    st.set_page_config(page_title="MediWay - Blood Report Analysis", page_icon="\U0001FA78", layout="wide")
 
-    # App title
-    st.title("MediWay")
-    st.subheader("Blood Report Analysis & Consultation")
+    if "page" not in st.session_state:
+        st.session_state.page = "login"
 
-    # Sidebar
-    with st.sidebar:
-        st.header("Upload")
+    if st.session_state.page == "login":
+        from auth import login_page
+        login_page()
 
-        # File uploader
-        uploaded_file = st.file_uploader("Upload Blood Report PDF", type=["pdf"])
+    elif st.session_state.page == "signup":
+        from auth import signup_page
+        signup_page()
 
-        # About section
-        st.divider()
-        st.markdown("### About MediWay")
-        st.info(
-            "MediWay helps you understand your blood test results through "
-            "AI-powered analysis and personalized insights."
-        )
-
-    # Main content area
-
-    # Display patient context form first
-    form_submitted = display_patient_form()
-
-    # If form was just submitted, collapse it
-    if form_submitted:
-        st.session_state.form_collapsed = True
-
-    # Process uploaded file
-    if uploaded_file is not None:
-        st.success("File uploaded successfully!")
-
-        # Process the PDF
-        with st.spinner("Processing the blood report..."):
-            temp_path = save_uploaded_file(uploaded_file)
-            success, lab_no = process_pdf(temp_path)
-
-            # Clean up the temp file
-            os.unlink(temp_path)
-
-        if success:
-            st.success(f"Report processed successfully! Lab Number: {lab_no}")
-
-            # Store the lab number in session state
-            st.session_state.current_lab_no = lab_no
-
-            # Get and display report data
-            report_data = fetch_report_data(lab_no)
-            if report_data:
-                display_report_and_insights(report_data, lab_no)
+    elif st.session_state.page == "dashboard":
+        if st.session_state.get("logged_in"):
+            app_dashboard()
         else:
-            st.error("Failed to process the report. Please try again with a clearer scan.")
+            st.session_state.page = "login"
+            st.rerun()
 
 
 if __name__ == "__main__":

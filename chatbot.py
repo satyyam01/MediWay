@@ -1,139 +1,164 @@
-import requests
+import os
 import json
-from database import fetch_patient_data
+import requests
+from dotenv import load_dotenv
+from typing import Optional, Dict, Any, List
 
-GROQ_API_KEY = "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"
+from database import (
+    fetch_patient_data,
+    get_conversation_history,
+    update_conversation_history
+)
+
+# Load environment variables
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
-def analyze_report(lab_no, custom_prompt=None, patient_context=None):
+def format_patient_context(patient_context: Optional[Dict[str, Any]]) -> str:
+    """Format the additional patient context into a readable prompt string."""
+    if not patient_context:
+        return ""
+
+    # BMI Calculation
+    bmi_info = ""
+    try:
+        weight = float(patient_context.get('weight', 0))
+        height_cm = float(patient_context.get('height', 0))
+        if weight and height_cm:
+            height_m = height_cm / 100
+            bmi = weight / (height_m ** 2)
+            bmi_info = f"Weight: {weight} kg, Height: {height_cm} cm, BMI: {bmi:.1f}"
+    except (ValueError, ZeroDivisionError):
+        pass
+
+    # Format other fields
+    symptoms = ", ".join(patient_context.get("symptoms", [])) or "None reported"
+    history = patient_context.get("history", "Not provided")
+    gender = patient_context.get("gender", "")
+    age = patient_context.get("age", "")
+    lifestyle = patient_context.get("lifestyle", "Not provided")
+    medications = patient_context.get("medications", "None reported")
+
+    return f"""
+Additional Patient Context:
+- Age: {age}, Gender: {gender}
+- {bmi_info}
+- Symptoms: {symptoms}
+- History: {history}
+- Lifestyle: {lifestyle}
+- Medications: {medications}
+""".strip()
+
+
+def analyze_report(
+        report_id: str,
+        custom_prompt: Optional[str] = None,
+        patient_context: Optional[Dict[str, Any]] = None
+) -> str:
     """
-    Fetch patient data and analyze it using Groq API with enhanced conversational prompts.
-    Now includes optional patient context for more personalized insights.
+    Generates a medical explanation or response using LLM based on the report.
 
     Args:
-        lab_no: Lab number for the report
-        custom_prompt: Optional specific question from the user
-        patient_context: Optional additional patient context data
+        report_id: Unique ID of the patient's report
+        custom_prompt: Optional question the patient asks
+        patient_context: Optional additional data for personalization
+
+    Returns:
+        LLM-generated message as string
     """
-    data = fetch_patient_data(lab_no)
-    if not data:
-        return {"error": "No patient found with this Lab No."}
+    # Step 1: Fetch patient report from DB
+    report_data = fetch_patient_data(report_id)
+    if not report_data:
+        return "❌ No patient data found for this report ID."
 
-    # Extract personal details for personalization
-    patient_name = data.get('Patient Details', {}).get('Name', 'there')
-    patient_age = data.get('Patient Details', {}).get('Age', '')
-    patient_gender = data.get('Patient Details', {}).get('Gender', '')
+    patient_details = report_data.get("Patient Details", {})
+    patient_name = patient_details.get("Name", "there")
+    first_name = patient_name.split()[0] if patient_name else "there"
+    age = patient_details.get("Age", "unknown age")
+    gender = patient_details.get("Gender", "unspecified")
 
-    patient_info = json.dumps(data, indent=2)
+    # Step 2: Format background
+    context_str = format_patient_context(patient_context)
+    full_report_json = json.dumps(report_data, indent=2)
 
-    # Process additional patient context if available
-    context_info = ""
-    if patient_context:
-        # Format weight and height for BMI calculation if available
-        weight = patient_context.get('weight', '')
-        height = patient_context.get('height', '')
-        bmi_info = ""
-        if weight and height:
-            try:
-                weight_kg = float(weight)
-                height_m = float(height) / 100  # Convert cm to m
-                bmi = weight_kg / (height_m * height_m)
-                bmi_info = f"BMI: {bmi:.1f} ({weight} kg, {height} cm)"
-            except ValueError:
-                bmi_info = f"Weight: {weight} kg, Height: {height} cm"
+    background_context = f"""
+Patient Info:
+Name: {patient_name}
+Age: {age}, Gender: {gender}
 
-        # Format medical conditions
-        medical_conditions = patient_context.get('medical_conditions', [])
-        conditions_str = ", ".join(medical_conditions) if medical_conditions else "None reported"
+Lab Report:
+{full_report_json}
 
-        # Compile context information
-        context_info = f"""
-        *Additional Patient Context:*
-        {bmi_info}
-        Medical Conditions: {conditions_str}
-        Symptoms: {patient_context.get('symptoms', 'None reported')}
-        Lifestyle: {patient_context.get('lifestyle', 'No information provided')}
-        Medications: {patient_context.get('medications', 'None reported')}
-        """
+{context_str}
+""".strip()
 
-    # Base persona setup
-    system_role = f"""You are Dr. {patient_name.split()[0]}'s Care Assistant, a friendly AI medical companion with a warm, 
-    empathetic tone. You specialize in explaining complex medical information in simple, relatable terms. 
-    Always:
-    - Use the patient's name ({patient_name}) when addressing them
-    - Show genuine concern and maintain positive reinforcement
-    - Use conversational language with natural pauses (e.g., "Let's see...", "Hmm, I notice that...")
-    - Explain medical terms using everyday analogies
-    - Check for understanding periodically
-    - Maintain hopeful tone while being honest about risks
-    - Use paragraph breaks for readability
-    - When patient context is available, reference relevant lifestyle factors, symptoms, medical conditions or medications that might affect the results"""
+    # Step 3: System prompt
+    system_prompt = f"""
+You are Dr. {first_name}'s AI health assistant.
+You specialize in analyzing blood test results and explaining them in empathetic, simple language.
+
+ALWAYS follow these:
+- Use the patient's first name ({first_name})
+- Be warm, positive, and compassionate
+- Use analogies and everyday language
+- Only greet once (if it's the first message)
+- If this is a follow-up, do NOT repeat prior insights unless asked
+- Use paragraph breaks for readability
+"""
+
+    # Step 4: Assemble messages
+    messages: List[Dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": background_context}
+    ]
+
+    # Add chat history if present
+    history = get_conversation_history(report_id)
+    messages.extend(history)
 
     if custom_prompt:
-        prompt = f"""*Patient Background:*
-        {patient_name}, {patient_age} {patient_gender}
-        {patient_info}
-        {context_info}
-
-        *Current Conversation:*
-        User asks: "{custom_prompt}"
-
-        Respond as if talking to a friend:
-        1. Acknowledge their concern with empathy
-        2. Answer clearly with 1-2 key points max
-        3. Offer to explain further or discuss next steps
-        4. Use relatable examples (e.g., "This vitamin level is like your car's...")
-        5. If their question relates to any provided medical conditions, medications, or symptoms, make specific connections
-        """
+        messages.append({"role": "user", "content": custom_prompt})
     else:
-        prompt = f"""*New Patient Report Review:*
-        {patient_name}, {patient_age} {patient_gender}
-        {patient_info}
-        {context_info}
+        # First-time AI greeting instructions
+        messages.append({
+            "role": "system",
+            "content": (
+                f"Start by greeting {first_name} and highlight 1-2 key findings. "
+                "Explain them simply, use a helpful analogy, relate any symptoms provided, "
+                "and ask how they're feeling. Offer some positive next steps."
+            )
+        })
 
-        *Your Task:*
-        Initiate conversation by:
-        1. Friendly greeting using their name
-        2. Mention 1-2 most notable findings in simple terms, relate to any provided medical conditions if relevant
-        3. Explain one relevant analogy/metaphor
-        4. If patient provided context (symptoms, conditions, medications), make specific connections to test results
-        5. Ask an open-ended question about their current experience
-        6. Suggest clear next steps as options, not commands
-
-        Example structure:
-        "Hi {patient_name}, I've reviewed your results along with the additional information you provided. Let's start with what's most important...
-        [Simple explanation] This is similar to [everyday analogy]...
-        I noticed you mentioned [symptom/condition] - this relates to your results because...
-        How does this align with how you've been feeling lately?" 
-        """
-
+    # Step 5: API call
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": "qwen-2.5-coder-32b",
-        "messages": [
-            {"role": "system", "content": system_role},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.85,  # Slightly higher for creativity
-        "max_tokens": 1000,
+        "model": "llama3-8b-8192",
+        "messages": messages,
+        "temperature": 0.85,
         "top_p": 0.9,
-        "frequency_penalty": 0.2,  # Reduce repetition
+        "max_tokens": 1000,
+        "frequency_penalty": 0.2,
         "presence_penalty": 0.1
     }
 
     try:
         response = requests.post(GROQ_API_URL, headers=headers, json=payload)
         response.raise_for_status()
-        raw_response = response.json()["choices"][0]["message"]["content"]
+        bot_reply = response.json()["choices"][0]["message"]["content"]
 
-        # Add conversational formatting
-        return raw_response.replace(". ", ".  ")  # Add spacing for better readability
+        # Store only user-initiated interactions
+        if custom_prompt:
+            update_conversation_history(report_id, custom_prompt, bot_reply)
+
+        return bot_reply
+
     except requests.exceptions.RequestException as e:
-        return f"Apologies {patient_name}, I'm experiencing technical difficulties. Please try again in a moment."
+        return f"Apologies {first_name}, I'm facing technical difficulties reaching the AI model. ({str(e)})"
     except (KeyError, IndexError, json.JSONDecodeError) as e:
-        return f"Looks like something went sideways. Could you rephrase your question?"
+        return f"Apologies {first_name}, something went wrong while processing the response. ({str(e)})"

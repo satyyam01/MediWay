@@ -17,10 +17,17 @@ models_to_test = [
     "qwen-2.5-32b",
     "llama-3.3-70b-specdec",
     "llama-3.2-11b-Vision-Preview",
-    "mistral-saba-24b",  # Strong alternative to Mixtral
-    "llama3-8b-8192",  # Smaller but efficient
-    "qwen-2.5-coder-32b",  # May help with structured medical reasoning
-    "gemma2-9b-it"  # Google's fine-tuned model
+    "mistral-saba-24b",
+    "llama3-8b-8192",
+    "qwen-2.5-coder-32b",
+    "gemma2-9b-it",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama-guard-3-8b",
+    # Audio models below — excluded from this run unless used for speech-to-text
+    # "whisper-large-v3",
+    # "whisper-large-v3-turbo",
+    # "distil-whisper-large-v3-en"
 ]
 
 # Load test cases
@@ -72,7 +79,7 @@ for model in models_to_test:
 
         logging.info(f"Model {model} - Lab No: {lab_no} - Response saved")
 
-        # Avoid rate limiting issues
+        # Avoid rate limiting
         time.sleep(1)
 
 # Save results to JSON

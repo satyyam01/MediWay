@@ -1,159 +1,163 @@
-import sqlite3
+from pymongo import MongoClient
 import bcrypt
-from flask import Flask, jsonify, request
+from typing import Dict, List
+from datetime import datetime
+import os
+from dotenv import load_dotenv
 
-app = Flask(__name__)
+# Load environment variables
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+
+# Reusable MongoDB connection
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client["mediway"]
+users_collection = db["users"]
+patients_collection = db["patients"]
+tests_collection = db["tests"]
+conversations_collection = db["conversations"]
+
+# In-memory conversation cache
+conversation_cache: Dict[str, List[Dict[str, str]]] = {}
+
+
+# -----------------------------------
+# User Authentication
+# -----------------------------------
 
 class UserDatabase:
-    def __init__(self, db_name='users.db'):
-        """Initialize database and create users table if not exists"""
-        self.db_name = db_name
-        self._create_table()
+    def __init__(self):
+        # Ensure index
+        users_collection.create_index("username", unique=True)
 
-    def _get_connection(self):
-        """Create and return a database connection"""
-        return sqlite3.connect(self.db_name)
+    def user_exists(self, username: str) -> bool:
+        return users_collection.find_one({"username": username}) is not None
 
-    def _create_table(self):
-        """Create users table if not exists"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    username TEXT PRIMARY KEY,
-                    password TEXT NOT NULL,
-                    email TEXT UNIQUE NOT NULL
-                )
-            ''')
-            conn.commit()
-
-    def user_exists(self, username):
-        """Check if a user exists"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
-            return cursor.fetchone() is not None
-
-    def register_user(self, username, password, email):
-        """Register a new user with hashed password"""
-        # Check if user already exists
+    def register_user(self, username: str, password: str, email: str) -> bool:
         if self.user_exists(username):
             return False
-        # Hash the password
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    'INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
-                    (username, hashed_password, email)
-                )
-                conn.commit()
+            users_collection.insert_one({
+                "username": username,
+                "password": hashed_password,
+                "email": email
+            })
             return True
-        except sqlite3.IntegrityError:
+        except Exception as e:
+            print("Registration error:", e)
             return False
 
-    def login_user(self, username, password):
-        """Verify user credentials"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT password FROM users WHERE username = ?', (username,))
-            result = cursor.fetchone()
-            if result:
-                # Check the provided password against the stored hash
-                stored_password = result[0]
-                return bcrypt.checkpw(password.encode('utf-8'), stored_password)
-            return False
+    def login_user(self, username: str, password: str) -> bool:
+        user = users_collection.find_one({"username": username})
+        if user and bcrypt.checkpw(password.encode('utf-8'), user["password"]):
+            return True
+        return False
 
-# Initialize UserDatabase
-user_db = UserDatabase()
 
-def fetch_patient_data(lab_no):
-    """Fetch patient and test data from the database using Lab No."""
-    conn = sqlite3.connect("medical_reports_new.db")
-    cursor = conn.cursor()
+# -----------------------------------
+# Fetching Patient + Test Data
+# -----------------------------------
 
-    # Fetch Patient Details
-    cursor.execute("SELECT * FROM Patients WHERE lab_no = ?", (lab_no,))
-    patient = cursor.fetchone()
+def fetch_patient_data(report_id: str) -> Dict:
+    try:
+        patient = patients_collection.find_one({"report_id": report_id})
+        if not patient:
+            return None
 
-    if not patient:
-        conn.close()
+        tests = list(tests_collection.find({"report_id": report_id}))
+
+        return {
+            "Patient Details": {
+                "Name": patient.get("name"),
+                "Age": patient.get("age"),
+                "Gender": patient.get("gender"),
+                "Collected Date": patient.get("collected_date"),
+                "Reported Date": patient.get("reported_date")
+            },
+            "Tests": [
+                {
+                    "Name": test["test_name"],
+                    "Value": test["result"],
+                    "Unit": test["unit"],
+                    "Reference Interval": test.get("reference_interval", "")
+                }
+                for test in tests
+            ]
+        }
+    except Exception as e:
+        print("Error fetching patient data:", e)
         return None
 
-    patient_id = patient[0]  # Primary Key of the patient
 
-    # Fetch Tests Data
-    cursor.execute("SELECT test_name, result, unit, reference_interval, reference_interval_upper FROM Tests WHERE patient_id = ?", (patient_id,))
-    tests = cursor.fetchall()
+# -----------------------------------
+# Conversation Management
+# -----------------------------------
 
-    conn.close()
+def get_conversation_history(report_id: str) -> List[Dict[str, str]]:
+    if report_id not in conversation_cache:
+        conversation_cache[report_id] = _load_conversation_from_db(report_id)
+    return conversation_cache[report_id]
 
-    return {
-        "Patient Details": {
-            "Name": patient[1],
-            "Age": patient[2],
-            "Gender": patient[3],
-            "Lab Number": patient[4],
-            "Collected Date": patient[5],
-            "Reported Date": patient[6]
-        },
-        "Tests": [
+
+def update_conversation_history(report_id: str, user_message: str, bot_response: str) -> None:
+    history = get_conversation_history(report_id)
+    history.append({"role": "user", "content": user_message})
+    history.append({"role": "assistant", "content": bot_response})
+
+    # Keep only last 10 entries
+    conversation_cache[report_id] = history[-10:]
+    _save_conversation_to_db(report_id, conversation_cache[report_id])
+
+
+def clear_conversation_history(report_id: str) -> None:
+    if report_id in conversation_cache:
+        del conversation_cache[report_id]
+    conversations_collection.delete_one({"report_id": report_id})
+
+
+def _save_conversation_to_db(report_id: str, conversation_data: List[Dict[str, str]]) -> None:
+    try:
+        conversations_collection.update_one(
+            {"report_id": report_id},
             {
-                "Name": test[0],
-                "Value": test[1],
-                "Unit": test[2],
-                "Reference Interval": f"{test[3]} - {test[4]}" if test[4] else test[3]
-            }
-            for test in tests
-        ]
-    }
+                "$set": {
+                    "conversation_data": conversation_data,
+                    "last_updated": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+    except Exception as e:
+        print("Error saving conversation:", e)
 
-@app.route('/register', methods=['POST'])
-def register():
-    """API Endpoint to register a new user"""
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    email = data.get('email')
 
-    if not username or not password or not email:
-        return jsonify({"error": "Missing required fields"}), 400
+def _load_conversation_from_db(report_id: str) -> List[Dict[str, str]]:
+    try:
+        doc = conversations_collection.find_one({"report_id": report_id})
+        if doc:
+            return doc.get("conversation_data", [])
+    except Exception as e:
+        print("Error loading conversation:", e)
+    return []
 
-    if user_db.register_user(username, password, email):
-        return jsonify({"message": "User registered successfully"}), 201
-    else:
-        return jsonify({"error": "Username or email already exists"}), 400
+def delete_report_and_related_data(report_id: str) -> bool:
+    try:
+        # Delete patient record
+        patients_collection.delete_one({"report_id": report_id})
 
-@app.route('/login', methods=['POST'])
-def login():
-    """API Endpoint to login a user"""
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
+        # Delete related test results
+        tests_collection.delete_many({"report_id": report_id})
 
-    if not username or not password:
-        return jsonify({"error": "Missing username or password"}), 400
+        # Delete conversation history from cache and DB
+        clear_conversation_history(report_id)
 
-    if user_db.login_user(username, password):
-        return jsonify({"message": "Login successful"}), 200
-    else:
-        return jsonify({"error": "Invalid credentials"}), 401
+        # Optional: Remove from user's report list if tracking (not used currently)
+        users_collection.update_many({}, {"$pull": {"reports": report_id}})
 
-@app.route('/fetch-report', methods=['GET'])
-def get_report():
-    """API Endpoint to fetch medical reports by Lab Number."""
-    lab_no = request.args.get('lab_no')
+        print(f"✅ Deleted report and related data for report_id: {report_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error deleting report data for {report_id}: {e}")
+        return False
 
-    if not lab_no:
-        return jsonify({"error": "Missing lab_no parameter"}), 400
-
-    report_data = fetch_patient_data(lab_no)
-
-    if report_data is None:
-        return jsonify({"error": "No report found for the given Lab Number"}), 404
-
-    return jsonify(report_data)
-
-if __name__ == '__main__':
-    app.run(debug=True)
